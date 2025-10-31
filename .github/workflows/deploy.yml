@@ -2,7 +2,7 @@ name: Deploy Static Website to AWS EC2
 
 on:
   push:
-    branches: [ "main" ]  # runs automatically when you push to main branch
+    branches: [ "main" ]  # Runs automatically when you push to main branch
 
 jobs:
   deploy:
@@ -17,15 +17,17 @@ jobs:
       - name: Build Docker image
         run: docker build -t static-web:latest docker/
 
-      # Step 3️⃣ — Verify image was built
+      # Step 3️⃣ — Verify image was built successfully
       - name: List Docker images
         run: docker images
 
-      # Step 4️⃣ — Save image as .tar file
-      - name: Save image as tar file
-        run: docker save static-web:latest -o static-web.tar
+      # Step 4️⃣ — Save image as tar file and fix permissions
+      - name: Save image as tar file and fix permissions
+        run: |
+          docker save static-web:latest -o static-web.tar
+          sudo chmod 644 static-web.tar
 
-      # Step 5️⃣ — Check tar file exists and show details
+      # Step 5️⃣ — Verify tar file exists
       - name: Verify tar file exists
         run: ls -lh static-web.tar
 
@@ -40,7 +42,7 @@ jobs:
           target: "~/"
           overwrite: true
 
-      # Step 7️⃣ — Deploy on EC2 (load + run container)
+      # Step 7️⃣ — Deploy and run the container on EC2
       - name: Deploy Docker container on EC2
         uses: appleboy/ssh-action@v1.1.0
         with:
@@ -57,5 +59,8 @@ jobs:
 
             echo "✅ Starting new container..."
             docker run -d -p 80:80 --name static-web static-web:latest
+
+            echo "🧹 Cleaning up temporary files..."
+            rm -f static-web.tar
 
             echo "🎉 Deployment completed successfully!"
