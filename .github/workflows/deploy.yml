@@ -22,6 +22,7 @@ jobs:
 
       - name: Save image to tar
         run: |
+          sudo chmod -R 777 .
           docker save aj-static-site:latest -o static-web.tar
 
       - name: Copy image to EC2
