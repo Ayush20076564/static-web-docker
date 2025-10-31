@@ -1,66 +1,47 @@
-name: Deploy Static Website to AWS EC2
+name: 🚀 Deploy Static Website to EC2
 
 on:
   push:
-    branches: [ "main" ]  # Runs automatically when you push to main branch
+    branches:
+      - main  # deploy automatically when you push to main
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1️⃣ — Checkout your repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Step 2️⃣ — Build Docker image for your static site
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build Docker image
-        run: docker build -t static-web:latest docker/
-
-      # Step 3️⃣ — Verify image was built successfully
-      - name: List Docker images
-        run: docker images
-
-      # Step 4️⃣ — Save image as tar file and fix permissions
-      - name: Save image as tar file and fix permissions
         run: |
-          docker save static-web:latest -o static-web.tar
-          sudo chmod 644 static-web.tar
+          docker build -t aj-static-site:latest .
 
-      # Step 5️⃣ — Verify tar file exists
-      - name: Verify tar file exists
-        run: ls -lh static-web.tar
+      - name: Save image to tar
+        run: |
+          docker save aj-static-site:latest -o static-web.tar
 
-      # Step 6️⃣ — Copy Docker image to EC2 instance
-      - name: Copy Docker image to EC2 instance
+      - name: Copy image to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_KEY }}
-          source: "./static-web.tar"
-          target: "~/"
-          overwrite: true
+          source: "static-web.tar"
+          target: "/home/ubuntu/static-web.tar"
 
-      # Step 7️⃣ — Deploy and run the container on EC2
-      - name: Deploy Docker container on EC2
-        uses: appleboy/ssh-action@v1.1.0
+      - name: Load and run on EC2
+        uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_KEY }}
           script: |
-            echo "🚀 Loading new Docker image..."
-            docker load -i static-web.tar
-
-            echo "🛑 Stopping old container (if running)..."
-            docker stop static-web || true
-            docker rm static-web || true
-
-            echo "✅ Starting new container..."
-            docker run -d -p 80:80 --name static-web static-web:latest
-
-            echo "🧹 Cleaning up temporary files..."
-            rm -f static-web.tar
-
-            echo "🎉 Deployment completed successfully!"
+            sudo docker stop aj-static-site || true
+            sudo docker rm aj-static-site || true
+            sudo docker load -i /home/ubuntu/static-web.tar
+            sudo docker run -d -p 80:80 --name aj-static-site aj-static-site:latest
+            sudo docker system prune -f
