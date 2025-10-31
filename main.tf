@@ -3,7 +3,7 @@ provider "aws" {
 }
 
 resource "aws_key_pair" "aj_key" {
-  key_name   = "aj-key"
+  key_name   = "Aj Website"
   public_key = file("~/.ssh/id_rsa.pub")
 }
 
