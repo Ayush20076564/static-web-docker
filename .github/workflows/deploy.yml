@@ -14,19 +14,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ✅ Step 2: Build Docker image with correct name
-      - name: Build Docker image (no cache)
+      # ✅ Step 2: Build Docker image (force rebuild to include latest HTML)
+      - name: Build Docker image
         run: |
-          docker build  --no-cache -t aj-static-site:latest -f docker/Dockerfile .
+          docker build --no-cache -t aj-static-site:latest -f docker/Dockerfile .
 
-      # ✅ Step 3: Save Docker image as tar and fix permissions
+      # ✅ Step 3: Save Docker image as .tar and fix permissions
       - name: Save Docker image as tar and fix permissions
         run: |
           docker save aj-static-site:latest -o static-web.tar
           sudo chmod 777 static-web.tar
-          ls -lh static-web.tar
+          ls -lh static-web.tar  # ✅ confirm it's a FILE, not folder
 
-      # ✅ Step 4: Copy image to EC2
+      # ✅ Step 4: Copy .tar to EC2
       - name: Copy image to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -34,7 +34,7 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_KEY }}
           source: "static-web.tar"
-          target: "/home/ubuntu/static-web.tar"
+          target: "/home/ubuntu/static-web.tar"  # ✅ ensure it's copied as file, not folder
           overwrite: true
 
       # ✅ Step 5: SSH into EC2 and deploy container
@@ -50,7 +50,12 @@ jobs:
             sudo docker rm aj-static-site || true
 
             echo "📦 Loading new image..."
-            sudo docker load -i /home/ubuntu/static-web.tar
+            cd /home/ubuntu
+            if [ -d static-web.tar ]; then
+              echo "❌ Detected folder instead of file, fixing..."
+              sudo rm -rf static-web.tar
+            fi
+            sudo docker load -i static-web.tar
 
             echo "🚀 Starting new container..."
             sudo docker run -d -p 80:80 --name aj-static-site aj-static-site:latest
