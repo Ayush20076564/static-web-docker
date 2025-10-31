@@ -18,7 +18,7 @@ jobs:
 
       - name: Build Docker image
         run: |
-          docker build -t aj-static-site:latest .
+          docker build -t aj-static-site:latest -f docker/Dockerfile .
 
       - name: Save image to tar
         run: |
