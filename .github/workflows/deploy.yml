@@ -1,32 +1,32 @@
-name: 🚀 Auto Deploy Static Website to EC2
+name: 🚀 Auto Deploy aj-static-site to EC2
 
 on:
   push:
     branches:
-      - main   # deploy automatically when you push to main
+      - main   # Deploy automatically when pushing to main
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # ✅ Step 1: Checkout repo
+      # ✅ Step 1: Checkout code
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ✅ Step 2: Build Docker image
+      # ✅ Step 2: Build Docker image with correct name
       - name: Build Docker image
         run: |
           docker build -t aj-static-site:latest -f docker/Dockerfile .
 
-      # ✅ Step 3: Save image to tar and fix permissions
+      # ✅ Step 3: Save Docker image as tar and fix permissions
       - name: Save Docker image as tar and fix permissions
         run: |
           docker save aj-static-site:latest -o static-web.tar
           sudo chmod 777 static-web.tar
           ls -lh static-web.tar
 
-      # ✅ Step 4: Copy the image to EC2 via SCP
+      # ✅ Step 4: Copy image to EC2
       - name: Copy image to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -45,17 +45,17 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_KEY }}
           script: |
-            echo "🔁 Stopping old container (if exists)..."
+            echo "🛑 Stopping old container (if exists)..."
             sudo docker stop aj-static-site || true
             sudo docker rm aj-static-site || true
 
-            echo "📦 Loading new Docker image..."
+            echo "📦 Loading new image..."
             sudo docker load -i /home/ubuntu/static-web.tar
 
-            echo "🚀 Running new container..."
+            echo "🚀 Starting new container..."
             sudo docker run -d -p 80:80 --name aj-static-site aj-static-site:latest
 
             echo "🧹 Cleaning up old resources..."
             sudo docker system prune -f
 
-            echo "✅ Deployment complete!"
+            echo "✅ Deployment successful!"
