@@ -1,5 +1,5 @@
 provider "aws" {
-  region = "us-east-1c" # or your preferred regios
+  region = "us-east-1c" # or your preferred regions
 }
 
 # Security group for HTTP + SSH access
