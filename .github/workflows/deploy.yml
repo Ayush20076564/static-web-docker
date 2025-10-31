@@ -1,9 +1,9 @@
-name: 🚀 Deploy Static Website to EC2
+name: 🚀 Auto Deploy Static Website to EC2
 
 on:
   push:
     branches:
-      - main  # deploy automatically when you push to main
+      - main
 
 jobs:
   deploy:
@@ -13,17 +13,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
+      # 👇 Optional: if your Dockerfile is inside a folder (like /docker/)
+      # change '.' to the correct path or add '-f docker/Dockerfile'
       - name: Build Docker image
         run: |
           docker build -t aj-static-site:latest -f docker/Dockerfile .
 
-      - name: Save image to tar
+      - name: Save image to tar (with full permissions)
         run: |
           sudo chmod -R 777 .
           docker save aj-static-site:latest -o static-web.tar
+          ls -lh static-web.tar
 
       - name: Copy image to EC2
         uses: appleboy/scp-action@v0.1.7
@@ -33,8 +33,9 @@ jobs:
           key: ${{ secrets.EC2_KEY }}
           source: "static-web.tar"
           target: "/home/ubuntu/static-web.tar"
+          overwrite: true
 
-      - name: Load and run on EC2
+      - name: Load and restart Docker container on EC2
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
