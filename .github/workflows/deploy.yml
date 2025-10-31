@@ -15,9 +15,9 @@ jobs:
         uses: actions/checkout@v4
 
       # ✅ Step 2: Build Docker image with correct name
-      - name: Build Docker image
+      - name: Build Docker image (no cache)
         run: |
-          docker build -t aj-static-site:latest -f docker/Dockerfile .
+          docker build  --no-cache -t aj-static-site:latest -f docker/Dockerfile .
 
       # ✅ Step 3: Save Docker image as tar and fix permissions
       - name: Save Docker image as tar and fix permissions
