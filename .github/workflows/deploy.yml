@@ -1,9 +1,8 @@
-name: 🚀 Build and Deploy aj-static-site to EC2
+name: 🚀 Build and Deploy aj-static-site to EC2 with Ansible
 
 on:
   push:
-    branches:
-      - main   # 👈 Triggers deployment when code is pushed to main branch
+    branches: [ main ]
 
 jobs:
   build:
@@ -11,77 +10,45 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ✅ Step 1: Checkout code
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # ✅ Step 2: Build Docker image (from /docker folder)
       - name: Build Docker image
         run: |
-          echo "🛠️ Building Docker image..."
           docker build --no-cache -t aj-static-site:latest -f docker/Dockerfile ./docker
-          echo "✅ Docker image built successfully!"
 
-      # ✅ Step 3: Save Docker image as tar file
-      - name: Save Docker image as tar
+      - name: Save Docker image
         run: |
-          echo "📦 Saving Docker image to tar file..."
           docker save aj-static-site:latest -o static-web.tar
           chmod 777 static-web.tar
-          ls -lh static-web.tar
-          echo "✅ Docker image saved successfully!"
 
-      # ✅ Step 4: Upload tar as artifact (for next job)
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: static-web
           path: static-web.tar
 
   deploy:
-    name: 🚀 Deploy to EC2
+    name: 🚀 Deploy using Ansible
     runs-on: ubuntu-latest
     needs: build
 
     steps:
-      # ✅ Step 1: Download the artifact from build job
-      - name: Download artifact
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: static-web
           path: .
 
-      # ✅ Step 2: Copy tar file to EC2 instance
-      - name: Copy image to EC2
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_KEY }}
-          source: "static-web.tar"
-          target: "/home/ubuntu/"  # ✅ FIXED PATH (copy file into folder, not create one)
-          overwrite: true
+      - name: Install Ansible
+        run: sudo apt-get update && sudo apt-get install -y ansible
 
-      # ✅ Step 3: SSH into EC2 and deploy Docker container
-      - name: SSH and Deploy on EC2
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_KEY }}
-          script: |
-            echo "🛑 Stopping old container (if any)..."
-            sudo docker stop aj-static-site || true
-            sudo docker rm aj-static-site || true
+      - name: Create inventory file
+        run: |
+          echo "[web]" > hosts.ini
+          echo "${{ secrets.EC2_HOST }}" >> hosts.ini
 
-            echo "📦 Loading new image..."
-            cd /home/ubuntu
-            sudo docker load -i static-web.tar
-
-            echo "🚀 Running new container..."
-            sudo docker run -d -p 80:80 --name aj-static-site aj-static-site:latest
-
-            echo "🧹 Cleaning up unused resources..."
-            sudo docker system prune -f
-
-            echo "✅ Deployment successful!"
+      - name: Deploy with Ansible
+        env:
+          ANSIBLE_HOST_KEY_CHECKING: "False"
+        run: |
+          ansible-playbook -i hosts.ini ansible/deploy.yml \
+            --private-key <(echo "${{ secrets.EC2_KEY }}") \
+            -u ubuntu
