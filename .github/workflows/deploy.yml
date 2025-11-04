@@ -3,7 +3,7 @@ name: 🚀 Build and Deploy aj-static-site to EC2
 on:
   push:
     branches:
-      - main  # Auto-deploy when pushing to main
+      - main   # 👈 Triggers deployment when code is pushed to main branch
 
 jobs:
   build:
@@ -11,20 +11,28 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      # ✅ Step 1: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
+      # ✅ Step 2: Build Docker image (from /docker folder)
       - name: Build Docker image
         run: |
+          echo "🛠️ Building Docker image..."
           docker build --no-cache -t aj-static-site:latest -f docker/Dockerfile ./docker
+          echo "✅ Docker image built successfully!"
 
+      # ✅ Step 3: Save Docker image as tar file
       - name: Save Docker image as tar
         run: |
+          echo "📦 Saving Docker image to tar file..."
           docker save aj-static-site:latest -o static-web.tar
-          sudo chmod 777 static-web.tar
+          chmod 777 static-web.tar
           ls -lh static-web.tar
+          echo "✅ Docker image saved successfully!"
 
-      - name: Upload image artifact
+      # ✅ Step 4: Upload tar as artifact (for next job)
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: static-web
@@ -36,12 +44,14 @@ jobs:
     needs: build
 
     steps:
-      - name: Download image artifact
+      # ✅ Step 1: Download the artifact from build job
+      - name: Download artifact
         uses: actions/download-artifact@v4
         with:
           name: static-web
           path: .
 
+      # ✅ Step 2: Copy tar file to EC2 instance
       - name: Copy image to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -49,17 +59,18 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_KEY }}
           source: "static-web.tar"
-          target: "/home/ubuntu/static-web.tar"
+          target: "/home/ubuntu/"  # ✅ FIXED PATH (copy file into folder, not create one)
           overwrite: true
 
-      - name: SSH into EC2 and deploy container
+      # ✅ Step 3: SSH into EC2 and deploy Docker container
+      - name: SSH and Deploy on EC2
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_KEY }}
           script: |
-            echo "🛑 Stopping old container (if exists)..."
+            echo "🛑 Stopping old container (if any)..."
             sudo docker stop aj-static-site || true
             sudo docker rm aj-static-site || true
 
@@ -67,10 +78,10 @@ jobs:
             cd /home/ubuntu
             sudo docker load -i static-web.tar
 
-            echo "🚀 Starting new container..."
+            echo "🚀 Running new container..."
             sudo docker run -d -p 80:80 --name aj-static-site aj-static-site:latest
 
-            echo "🧹 Cleaning up old resources..."
+            echo "🧹 Cleaning up unused resources..."
             sudo docker system prune -f
 
             echo "✅ Deployment successful!"
