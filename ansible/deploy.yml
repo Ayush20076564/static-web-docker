@@ -1,6 +1,6 @@
 ---
 - name: Deploy static website container
-  hosts: all
+  hosts: all        # ✅ applies to all hosts in inventory (simpler and works universally)
   become: yes
   tasks:
     - name: Stop old container if running
