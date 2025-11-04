@@ -1,43 +1,28 @@
-name: "🚀 Full CI/CD: Terraform + Docker + Ansible Deployment"
+name: 🚀 Build and Deploy aj-static-site to EC2
 
 on:
   push:
     branches:
-      - main  # Trigger workflow when code is pushed to main branch
+      - main   # Trigger workflow on push to main
 
 jobs:
   build:
-    name: "🧱 Infrastructure & Build Stage"
+    name: 🔨 Build Docker Image
     runs-on: ubuntu-latest
 
     steps:
-      # STEP 1: Checkout repository to access Terraform & Docker files
+      # ✅ Step 1: Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # STEP 2: Terraform provisioning (create EC2 + security group)
-      - name: Terraform Init & Apply
-        run: |
-          echo "🏗️ Initializing Terraform..."
-          cd terraform || cd .   # adjust path if terraform files are in root
-          terraform init -input=false
-          echo "🚀 Applying Terraform (provisioning EC2 instance)..."
-          terraform apply -auto-approve -input=false
-          echo "✅ Terraform provisioning complete!"
-          cd ..
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: us-east-1
-
-      # STEP 3: Build Docker image for static website
+      # ✅ Step 2: Build Docker image
       - name: Build Docker image
         run: |
           echo "🛠️ Building Docker image..."
           docker build --no-cache -t aj-static-site:latest -f docker/Dockerfile ./docker
           echo "✅ Docker image built successfully!"
 
-      # STEP 4: Save Docker image as tar file
+      # ✅ Step 3: Save image as tar
       - name: Save Docker image as tar
         run: |
           echo "📦 Saving Docker image..."
@@ -46,7 +31,7 @@ jobs:
           ls -lh static-web.tar
           echo "✅ Docker image saved successfully!"
 
-      # STEP 5: Upload tar artifact (shared with deploy job)
+      # ✅ Step 4: Upload tar as artifact
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -54,23 +39,23 @@ jobs:
           path: static-web.tar
 
   deploy:
-    name: "🚀 Deployment Stage (Ansible + EC2)"
+    name: 🚀 Deploy to EC2 using Ansible
     runs-on: ubuntu-latest
     needs: build
 
     steps:
-      # STEP 1: Checkout repo (to access ansible folder)
+      # ✅ Step 1: Checkout repository to get ansible/ folder
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # STEP 2: Download built Docker image from previous job
+      # ✅ Step 2: Download artifact from build job
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
           name: static-web
           path: .
 
-      # STEP 3: Transfer Docker image to EC2 via SCP
+      # ✅ Step 3: Copy Docker image tar to EC2
       - name: Copy tar file to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -81,7 +66,7 @@ jobs:
           target: "/home/ubuntu/"
           overwrite: true
 
-      # STEP 4: Run Ansible Playbook on EC2
+      # ✅ Step 4: Run Ansible playbook with inline inventory
       - name: Run Ansible playbook on EC2
         uses: dawidd6/action-ansible-playbook@v2
         with:
@@ -91,10 +76,8 @@ jobs:
             ${{ secrets.EC2_HOST }} ansible_user=${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_KEY }}
 
-      # STEP 5: Verify deployment success
-      - name: Verify running container
+      # ✅ Step 5: Deployment confirmation
+      - name: Deployment summary
         run: |
-          echo "🔍 Verifying container on EC2..."
-          ssh -i .ansible_key -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "docker ps | grep aj-static-site"
-          echo "✅ Container is running!"
-          echo "🌍 Website available at: http://${{ secrets.EC2_HOST }}"
+          echo "✅ Deployment completed successfully!"
+          echo "🌍 Your static website is live at: http://${{ secrets.EC2_HOST }}"
