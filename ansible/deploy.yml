@@ -1,0 +1,19 @@
+---
+- name: Deploy static website container
+  hosts: webserver
+  become: yes
+  tasks:
+    - name: Stop old container if running
+      command: docker stop aj-static-site || true
+
+    - name: Remove old container if exists
+      command: docker rm aj-static-site || true
+
+    - name: Load new image from tar
+      command: docker load -i /home/ubuntu/static-web.tar
+
+    - name: Run new container
+      command: docker run -d -p 80:80 --name aj-static-site aj-static-site:latest
+
+    - name: Clean up unused Docker resources
+      command: docker system prune -f
