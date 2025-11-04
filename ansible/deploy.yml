@@ -1,6 +1,6 @@
 ---
 - name: Deploy static website container
-  hosts: webserver
+  hosts: all
   become: yes
   tasks:
     - name: Stop old container if running
