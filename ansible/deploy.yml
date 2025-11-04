@@ -1,19 +1,54 @@
 ---
-- name: Deploy static website container
-  hosts: all
-  become: yes
+# ============================================================
+# 🧩 Ansible Playbook — Deploy Dockerized Static Website on EC2
+# ============================================================
+# This playbook runs on your AWS EC2 instance and:
+#   1. Stops any old running container
+#   2. Removes it (if exists)
+#   3. Loads the new Docker image (.tar) copied from GitHub Actions
+#   4. Runs the new container on port 80
+#   5. Cleans up unused Docker resources
+
+- name: Deploy static website container       # Descriptive name for playbook
+  hosts: all                                 # Apply to all hosts (defined by inventory)
+  become: yes                                # Run tasks with sudo privileges
+
   tasks:
+    # ------------------------------------------------------------
+    # 🛑 Step 1: Stop old container (if it's running)
+    # ------------------------------------------------------------
     - name: Stop old container if running
       shell: docker stop aj-static-site || true
+      # Using 'shell' allows the '|| true' syntax — avoids failure if container doesn't exist
 
+    # ------------------------------------------------------------
+    # 🗑️ Step 2: Remove any old container (if exists)
+    # ------------------------------------------------------------
     - name: Remove old container if exists
       shell: docker rm aj-static-site || true
+      # Ensures clean state before deploying a new container
 
+    # ------------------------------------------------------------
+    # 📦 Step 3: Load the new Docker image from the transferred tar file
+    # ------------------------------------------------------------
     - name: Load new image from tar
       shell: docker load -i /home/ubuntu/static-web.tar
+      # This imports the saved image into Docker on EC2
 
+    # ------------------------------------------------------------
+    # 🚀 Step 4: Run the new Docker container
+    # ------------------------------------------------------------
     - name: Run new container
       shell: docker run -d -p 80:80 --name aj-static-site aj-static-site:latest
+      # -d = detached mode
+      # -p 80:80 = map container port 80 to EC2 port 80 (public access)
+      # --name = assign name to container
+      # aj-static-site:latest = image name from build job
 
+    # ------------------------------------------------------------
+    # 🧹 Step 5: Clean up unused Docker images/containers
+    # ------------------------------------------------------------
     - name: Clean up unused Docker resources
       shell: docker system prune -f
+      # Removes dangling images, stopped containers, and unused layers
+      # Keeps EC2 storage clean and lightweight

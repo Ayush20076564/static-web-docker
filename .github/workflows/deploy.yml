@@ -1,47 +1,38 @@
-name: "Full CI/CD: Terraform + Docker + Ansible Deployment"
+# ============================================================
+# 🌍 GITHUB ACTIONS WORKFLOW
+# AUTOMATICALLY BUILDS AND DEPLOYS STATIC WEBSITE TO AWS EC2
+# USING DOCKER + ANSIBLE
+# ============================================================
+
+name: "🚀 Build and Deploy aj-static-site to EC2"
 
 on:
+  # 🧩 Trigger this workflow whenever code is pushed to the main branch
   push:
     branches:
-      - main  # Trigger workflow when code is pushed to main branch
+      - main
 
 jobs:
+  # ============================================================
+  # 🔨 BUILD JOB — builds Docker image for your static website
+  # ============================================================
   build:
-    name: "Infrastructure & Build Stage"
-    runs-on: ubuntu-latest
+    name: "🔨 Build Docker Image"
+    runs-on: ubuntu-latest  # GitHub-hosted runner environment
 
     steps:
-      # STEP 1: Checkout repository to access Terraform & Docker files
+      # ✅ Step 1: Checkout your repository to access code and Dockerfile
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # STEP 2: Install Terraform CLI
-      - name: Install Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.8.5  # Use any stable Terraform version
-
-      # STEP 3: Terraform provisioning (create EC2 + security group)
-      - name: Terraform Init & Apply
-        run: |
-          echo "🏗️ Initializing Terraform..."
-          terraform init -input=false
-          echo "🚀 Applying Terraform (provisioning EC2 instance)..."
-          terraform apply -auto-approve -input=false
-          echo "✅ Terraform provisioning complete!"
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: us-east-1
-
-      # STEP 4: Build Docker image for static website
+      # ✅ Step 2: Build Docker image using the Dockerfile in ./docker directory
       - name: Build Docker image
         run: |
           echo "🛠️ Building Docker image..."
           docker build --no-cache -t aj-static-site:latest -f docker/Dockerfile ./docker
           echo "✅ Docker image built successfully!"
 
-      # STEP 5: Save Docker image as tar file
+      # ✅ Step 3: Save Docker image to a .tar file for later transfer
       - name: Save Docker image as tar
         run: |
           echo "📦 Saving Docker image..."
@@ -50,55 +41,57 @@ jobs:
           ls -lh static-web.tar
           echo "✅ Docker image saved successfully!"
 
-      # STEP 6: Upload tar artifact (to share with deploy job)
+      # ✅ Step 4: Upload the tar file as an artifact to be shared with the deploy job
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: static-web
-          path: static-web.tar
+          name: static-web        # Artifact name
+          path: static-web.tar    # Path of the tar file to upload
 
+  # ============================================================
+  # 🚀 DEPLOY JOB — transfers Docker image and runs it on EC2
+  # ============================================================
   deploy:
-    name: "Deployment Stage (Ansible + EC2)"
+    name: "🚀 Deploy to EC2 using Ansible"
     runs-on: ubuntu-latest
-    needs: build
+    needs: build  # Ensures 'build' job completes successfully first
 
     steps:
-      # STEP 1: Checkout repository to get ansible/ folder
+      # ✅ Step 1: Checkout repo again to access ansible/deploy.yml playbook
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # STEP 2: Download built Docker image from previous job
+      # ✅ Step 2: Download the Docker image artifact created in the build job
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
-          name: static-web
-          path: .
+          name: static-web   # Must match the name used in upload step
+          path: .            # Download to current working directory
 
-      # STEP 3: Copy Docker image tar to EC2 instance
+      # ✅ Step 3: Copy Docker image tar file to your EC2 instance using SCP
       - name: Copy tar file to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_KEY }}
-          source: "static-web.tar"
-          target: "/home/ubuntu/"
-          overwrite: true
+          host: ${{ secrets.EC2_HOST }}         # EC2 public IP
+          username: ${{ secrets.EC2_USER }}     # e.g. 'ubuntu'
+          key: ${{ secrets.EC2_KEY }}           # SSH private key from secrets
+          source: "static-web.tar"              # File to copy
+          target: "/home/ubuntu/"               # Target directory on EC2
+          overwrite: true                       # Replace existing file if any
 
-      # STEP 4: Run Ansible Playbook on EC2 (inline inventory)
+      # ✅ Step 4: Run Ansible playbook to deploy Docker container on EC2
       - name: Run Ansible playbook on EC2
         uses: dawidd6/action-ansible-playbook@v2
         with:
-          playbook: ansible/deploy.yml
+          playbook: ansible/deploy.yml           # Path to your Ansible playbook
+          # Inline inventory definition (no separate hosts.ini file needed)
           inventory: |
             [all]
             ${{ secrets.EC2_HOST }} ansible_user=${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_KEY }}
+          key: ${{ secrets.EC2_KEY }}            # Use SSH key from secrets
 
-      # STEP 5: Verify container is running
-      - name: Verify running container
+      # ✅ Step 5: Print deployment summary and site URL
+      - name: Deployment summary
         run: |
-          echo "🔍 Verifying container on EC2..."
-          ssh -i .ansible_key -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "docker ps | grep aj-static-site"
-          echo "✅ Container is running!"
-          echo "🌍 Website available at: http://${{ secrets.EC2_HOST }}"
+          echo "✅ Deployment completed successfully!"
+          echo "🌍 Your static website is live at: http://${{ secrets.EC2_HOST }}"
