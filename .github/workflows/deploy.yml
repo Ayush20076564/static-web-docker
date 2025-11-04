@@ -3,7 +3,7 @@ name: 🚀 Build and Deploy aj-static-site to EC2
 on:
   push:
     branches:
-      - main   # Trigger workflow on push to main branch
+      - main   # Trigger workflow on push to main
 
 jobs:
   build:
@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ✅ Step 1: Checkout repository (to access Dockerfile, etc.)
+      # ✅ Step 1: Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -44,7 +44,7 @@ jobs:
     needs: build
 
     steps:
-      # ✅ Step 1: Checkout repo to get ansible/ folder
+      # ✅ Step 1: Checkout repository to get ansible/ folder
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -66,7 +66,16 @@ jobs:
           target: "/home/ubuntu/"
           overwrite: true
 
-      # ✅ Step 4: Run Ansible playbook to deploy the container
+      # ✅ Step 4: Dynamically create Ansible inventory file
+      - name: Create dynamic Ansible inventory
+        run: |
+          mkdir -p ansible
+          echo "[all]" > ansible/hosts.ini
+          echo "${{ secrets.EC2_HOST }} ansible_user=${{ secrets.EC2_USER }} ansible_ssh_private_key_file=.ansible_key" >> ansible/hosts.ini
+          echo "✅ Dynamic inventory created:"
+          cat ansible/hosts.ini
+
+      # ✅ Step 5: Run Ansible playbook to deploy container
       - name: Run Ansible playbook on EC2
         uses: dawidd6/action-ansible-playbook@v2
         with:
@@ -74,8 +83,8 @@ jobs:
           inventory: ansible/hosts.ini
           key: ${{ secrets.EC2_KEY }}
 
-      # ✅ Step 5: Confirm deployment completed
+      # ✅ Step 6: Deployment confirmation
       - name: Deployment summary
         run: |
           echo "✅ Deployment completed successfully!"
-          echo "🌍 Your static website should now be live at: http://${{ secrets.EC2_HOST }}"
+          echo "🌍 Your static website is live at: http://${{ secrets.EC2_HOST }}"
