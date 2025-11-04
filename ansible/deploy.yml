@@ -54,11 +54,11 @@
       shell: docker system prune -f
       # Removes dangling images, stopped containers, and unused layers
 
-    # ------------------------------------------------------------
+      # ------------------------------------------------------------
     # ✅ Step 6: Verify deployment (container + web response)
     # ------------------------------------------------------------
     - name: Check running containers
-      shell: "docker ps --filter 'name=aj-static-site' --format 'Container: {{.Names}} | Status: {{.Status}}'"
+      shell: "docker ps --filter 'name=aj-static-site' --format 'Container: {{ '{{' }}.Names{{ '}}' }} | Status: {{ '{{' }}.Status{{ '}}' }}'"
       register: container_status
 
     - name: Print container status
