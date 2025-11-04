@@ -1,27 +1,46 @@
-name: 🚀 Auto Deploy aj-static-site to EC2
+name: 🚀 Build and Deploy aj-static-site to EC2
 
 on:
   push:
     branches:
-      - main
+      - main  # Auto-deploy when pushing to main
 
 jobs:
-  deploy:
+  build:
+    name: 🔨 Build Docker Image
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Build Docker image
         run: |
-          docker build --no-cache -t aj-static-site:latest ./docker
+          docker build --no-cache -t aj-static-site:latest -f docker/Dockerfile ./docker
 
-      - name: Save Docker image as tar and fix permissions
+      - name: Save Docker image as tar
         run: |
           docker save aj-static-site:latest -o static-web.tar
           sudo chmod 777 static-web.tar
           ls -lh static-web.tar
+
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: static-web
+          path: static-web.tar
+
+  deploy:
+    name: 🚀 Deploy to EC2
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Download image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: static-web
+          path: .
 
       - name: Copy image to EC2
         uses: appleboy/scp-action@v0.1.7
@@ -29,12 +48,11 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_KEY }}
-          source: "./static-web.tar"
-          target: "/home/ubuntu/"
+          source: "static-web.tar"
+          target: "/home/ubuntu/static-web.tar"
           overwrite: true
-          debug: true
 
-      - name: Load and restart container on EC2
+      - name: SSH into EC2 and deploy container
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -47,10 +65,6 @@ jobs:
 
             echo "📦 Loading new image..."
             cd /home/ubuntu
-            if [ ! -f static-web.tar ]; then
-              echo "❌ ERROR: static-web.tar not found on EC2!"
-              exit 1
-            fi
             sudo docker load -i static-web.tar
 
             echo "🚀 Starting new container..."
