@@ -1,29 +1,25 @@
-name: 🚀 Full CI/CD: Terraform + Docker + Ansible Deployment
+name: "🚀 Full CI/CD: Terraform + Docker + Ansible Deployment"
 
 on:
   push:
     branches:
-      - main   # 🔁 Trigger workflow whenever code is pushed to main branch
+      - main  # Trigger workflow when code is pushed to main branch
 
 jobs:
   build:
-    name: 🧱 Infrastructure & Build Stage
+    name: "🧱 Infrastructure & Build Stage"
     runs-on: ubuntu-latest
 
     steps:
-      # ================================================================
-      # 🧩 STEP 1: Checkout repository to access Terraform & Docker files
-      # ================================================================
+      # STEP 1: Checkout repository to access Terraform & Docker files
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ================================================================
-      # 🌍 STEP 2: Terraform provisioning (create EC2 + security group)
-      # ================================================================
+      # STEP 2: Terraform provisioning (create EC2 + security group)
       - name: Terraform Init & Apply
         run: |
           echo "🏗️ Initializing Terraform..."
-          cd terraform || cd .   # <-- adjust if terraform files are in root
+          cd terraform || cd .   # adjust path if terraform files are in root
           terraform init -input=false
           echo "🚀 Applying Terraform (provisioning EC2 instance)..."
           terraform apply -auto-approve -input=false
@@ -34,18 +30,14 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: us-east-1
 
-      # ================================================================
-      # 🐳 STEP 3: Build Docker image for static website
-      # ================================================================
+      # STEP 3: Build Docker image for static website
       - name: Build Docker image
         run: |
           echo "🛠️ Building Docker image..."
           docker build --no-cache -t aj-static-site:latest -f docker/Dockerfile ./docker
           echo "✅ Docker image built successfully!"
 
-      # ================================================================
-      # 📦 STEP 4: Save Docker image as tar file
-      # ================================================================
+      # STEP 4: Save Docker image as tar file
       - name: Save Docker image as tar
         run: |
           echo "📦 Saving Docker image..."
@@ -54,9 +46,7 @@ jobs:
           ls -lh static-web.tar
           echo "✅ Docker image saved successfully!"
 
-      # ================================================================
-      # ☁️ STEP 5: Upload tar artifact (shared with deploy job)
-      # ================================================================
+      # STEP 5: Upload tar artifact (shared with deploy job)
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -64,29 +54,23 @@ jobs:
           path: static-web.tar
 
   deploy:
-    name: 🚀 Deployment Stage (Ansible + EC2)
+    name: "🚀 Deployment Stage (Ansible + EC2)"
     runs-on: ubuntu-latest
     needs: build
 
     steps:
-      # ================================================================
-      # 🧩 STEP 1: Checkout repo (to access ansible folder)
-      # ================================================================
+      # STEP 1: Checkout repo (to access ansible folder)
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ================================================================
-      # 📥 STEP 2: Download built Docker image from previous job
-      # ================================================================
+      # STEP 2: Download built Docker image from previous job
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
           name: static-web
           path: .
 
-      # ================================================================
-      # 🔐 STEP 3: Transfer Docker image to EC2 via SCP
-      # ================================================================
+      # STEP 3: Transfer Docker image to EC2 via SCP
       - name: Copy tar file to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -97,9 +81,7 @@ jobs:
           target: "/home/ubuntu/"
           overwrite: true
 
-      # ================================================================
-      # ⚙️ STEP 4: Run Ansible Playbook on EC2
-      # ================================================================
+      # STEP 4: Run Ansible Playbook on EC2
       - name: Run Ansible playbook on EC2
         uses: dawidd6/action-ansible-playbook@v2
         with:
@@ -109,9 +91,7 @@ jobs:
             ${{ secrets.EC2_HOST }} ansible_user=${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_KEY }}
 
-      # ================================================================
-      # ✅ STEP 5: Verify deployment success
-      # ================================================================
+      # STEP 5: Verify deployment success
       - name: Verify running container
         run: |
           echo "🔍 Verifying container on EC2..."
