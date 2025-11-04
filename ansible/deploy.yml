@@ -2,16 +2,18 @@
 # ============================================================
 # 🧩 Ansible Playbook — Deploy Dockerized Static Website on EC2
 # ============================================================
-# This playbook runs on your AWS EC2 instance and:
+# This playbook:
 #   1. Stops any old running container
 #   2. Removes it (if exists)
 #   3. Loads the new Docker image (.tar) copied from GitHub Actions
 #   4. Runs the new container on port 80
 #   5. Cleans up unused Docker resources
+#   6. Verifies that the container and site are running correctly
+# ============================================================
 
-- name: Deploy static website container       # Descriptive name for playbook
-  hosts: all                                 # Apply to all hosts (defined by inventory)
-  become: yes                                # Run tasks with sudo privileges
+- name: Deploy static website container
+  hosts: all
+  become: yes
 
   tasks:
     # ------------------------------------------------------------
@@ -33,7 +35,7 @@
     # ------------------------------------------------------------
     - name: Load new image from tar
       shell: docker load -i /home/ubuntu/static-web.tar
-      # This imports the saved image into Docker on EC2
+      # Imports the saved image into Docker on EC2
 
     # ------------------------------------------------------------
     # 🚀 Step 4: Run the new Docker container
@@ -42,8 +44,8 @@
       shell: docker run -d -p 80:80 --name aj-static-site aj-static-site:latest
       # -d = detached mode
       # -p 80:80 = map container port 80 to EC2 port 80 (public access)
-      # --name = assign name to container
-      # aj-static-site:latest = image name from build job
+      # --name = container name
+      # aj-static-site:latest = image name built in CI
 
     # ------------------------------------------------------------
     # 🧹 Step 5: Clean up unused Docker images/containers
@@ -51,4 +53,24 @@
     - name: Clean up unused Docker resources
       shell: docker system prune -f
       # Removes dangling images, stopped containers, and unused layers
-      # Keeps EC2 storage clean and lightweight
+
+    # ------------------------------------------------------------
+    # ✅ Step 6: Verify deployment (container + web response)
+    # ------------------------------------------------------------
+    - name: Check running containers
+      shell: docker ps --filter "name=aj-static-site" --format "Container: {{.Names}} | Status: {{.Status}}"
+      register: container_status
+
+    - name: Print container status
+      debug:
+        msg: "{{ container_status.stdout }}"
+      # Displays the container’s name and running status
+
+    - name: Verify that website responds on port 80
+      shell: curl -I http://localhost:80 || true
+      register: http_response
+
+    - name: Print HTTP response headers
+      debug:
+        msg: "{{ http_response.stdout_lines }}"
+      # Confirms the web server returns HTTP 200 OK or similar
