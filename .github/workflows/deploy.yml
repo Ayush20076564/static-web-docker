@@ -1,54 +1,61 @@
-name: 🚀 Build and Deploy aj-static-site to EC2 with Ansible
+name: 🚀 Auto Deploy aj-static-site to EC2 with Ansible
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main   # Deploy automatically when pushing to main
 
 jobs:
-  build:
-    name: 🔨 Build Docker Image
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      # ✅ Step 1: Checkout code
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
+      # ✅ Step 2: Install Ansible
+      - name: Install Ansible
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y ansible
+
+      # ✅ Step 3: Build Docker image
       - name: Build Docker image
         run: |
-          docker build --no-cache -t aj-static-site:latest -f docker/Dockerfile ./docker
+          docker build --no-cache -t aj-static-site:latest -f docker/Dockerfile .
 
+      # ✅ Step 4: Save Docker image as tar
       - name: Save Docker image
         run: |
           docker save aj-static-site:latest -o static-web.tar
-          chmod 777 static-web.tar
+          sudo chmod 777 static-web.tar
+          ls -lh static-web.tar
 
-      - uses: actions/upload-artifact@v4
+      # ✅ Step 5: Copy image to EC2
+      - name: Copy image to EC2
+        uses: appleboy/scp-action@v0.1.7
         with:
-          name: static-web
-          path: static-web.tar
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_KEY }}
+          source: "static-web.tar"
+          target: "/home/ubuntu/static-web.tar"
+          overwrite: true
 
-  deploy:
-    name: 🚀 Deploy using Ansible
-    runs-on: ubuntu-latest
-    needs: build
-
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: static-web
-          path: .
-
-      - name: Install Ansible
-        run: sudo apt-get update && sudo apt-get install -y ansible
-
-      - name: Create inventory file
+      # ✅ Step 6: Debug — list repo structure
+      - name: Debug repo structure
         run: |
-          echo "[web]" > hosts.ini
-          echo "${{ secrets.EC2_HOST }}" >> hosts.ini
+          echo "Current path:" && pwd
+          echo "Listing repo contents:" && ls -R
 
-      - name: Deploy with Ansible
+      # ✅ Step 7: Run Ansible playbook
+      - name: 🧩 Run Ansible Playbook
         env:
           ANSIBLE_HOST_KEY_CHECKING: "False"
+        working-directory: ${{ github.workspace }}
         run: |
+          echo "🚀 Running Ansible playbook..."
           ansible-playbook -i hosts.ini ansible/deploy.yml \
             --private-key <(echo "${{ secrets.EC2_KEY }}") \
             -u ubuntu
