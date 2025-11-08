@@ -28,11 +28,11 @@ jobs:
 
       - name: Initialize Terraform
         run: terraform init
-        working-directory: ./terraform
+        working-directory: .
 
       - name: Apply Terraform
         run: terraform apply -auto-approve
-        working-directory: ./terraform
+        working-directory: .
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -43,7 +43,7 @@ jobs:
         id: ec2
         run: |
           echo "EC2_PUBLIC_IP=$(terraform output -raw public_ip)" >> $GITHUB_ENV
-        working-directory: ./terraform
+        working-directory: .
 
   # ============================================================
   # 🔨 BUILD JOB — builds Docker image for your static website
