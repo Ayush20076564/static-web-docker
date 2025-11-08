@@ -1,38 +1,68 @@
 # ============================================================
 # 🌍 GITHUB ACTIONS WORKFLOW
-# AUTOMATICALLY BUILDS AND DEPLOYS STATIC WEBSITE TO AWS EC2
-# USING DOCKER + ANSIBLE
+# AUTOMATED INFRASTRUCTURE + DOCKER + ANSIBLE DEPLOYMENT
+# USING TERRAFORM + GITHUB ACTIONS
 # ============================================================
 
-name: "🚀 Build and Deploy aj-static-site to EC2"
+name: "🚀 Provision & Deploy aj-static-site to AWS EC2"
 
 on:
-  # 🧩 Trigger this workflow whenever code is pushed to the main branch
   push:
     branches:
       - main
 
 jobs:
   # ============================================================
+  # 🧱 TERRAFORM JOB — provisions AWS EC2 + Elastic IP + Security Group
+  # ============================================================
+  terraform:
+    name: "🧱 Provision AWS Infrastructure"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Initialize Terraform
+        run: terraform init
+        working-directory: ./terraform
+
+      - name: Apply Terraform
+        run: terraform apply -auto-approve
+        working-directory: ./terraform
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+
+      # ✅ Save EC2 public IP as environment variable for later jobs
+      - name: Capture EC2 Public IP
+        id: ec2
+        run: |
+          echo "EC2_PUBLIC_IP=$(terraform output -raw public_ip)" >> $GITHUB_ENV
+        working-directory: ./terraform
+
+  # ============================================================
   # 🔨 BUILD JOB — builds Docker image for your static website
   # ============================================================
   build:
     name: "🔨 Build Docker Image"
-    runs-on: ubuntu-latest  # GitHub-hosted runner environment
+    runs-on: ubuntu-latest
+    needs: terraform
 
     steps:
-      # ✅ Step 1: Checkout your repository to access code and Dockerfile
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ✅ Step 2: Build Docker image using the Dockerfile in ./docker directory
       - name: Build Docker image
         run: |
           echo "🛠️ Building Docker image..."
           docker build --no-cache -t aj-static-site:latest -f docker/Dockerfile ./docker
           echo "✅ Docker image built successfully!"
 
-      # ✅ Step 3: Save Docker image to a .tar file for later transfer
       - name: Save Docker image as tar
         run: |
           echo "📦 Saving Docker image..."
@@ -41,12 +71,11 @@ jobs:
           ls -lh static-web.tar
           echo "✅ Docker image saved successfully!"
 
-      # ✅ Step 4: Upload the tar file as an artifact to be shared with the deploy job
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: static-web        # Artifact name
-          path: static-web.tar    # Path of the tar file to upload
+          name: static-web
+          path: static-web.tar
 
   # ============================================================
   # 🚀 DEPLOY JOB — transfers Docker image and runs it on EC2
@@ -54,44 +83,41 @@ jobs:
   deploy:
     name: "🚀 Deploy to EC2 using Ansible"
     runs-on: ubuntu-latest
-    needs: build  # Ensures 'build' job completes successfully first
+    needs: [terraform, build]
 
     steps:
-      # ✅ Step 1: Checkout repo again to access ansible/deploy.yml playbook
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ✅ Step 2: Download the Docker image artifact created in the build job
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
-          name: static-web   # Must match the name used in upload step
-          path: .            # Download to current working directory
+          name: static-web
+          path: .
 
-      # ✅ Step 3: Copy Docker image tar file to your EC2 instance using SCP
+      # ✅ Copy image tar to the EC2 created by Terraform
       - name: Copy tar file to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.EC2_HOST }}         # EC2 public IP
-          username: ${{ secrets.EC2_USER }}     # e.g. 'ubuntu'
-          key: ${{ secrets.EC2_KEY }}           # SSH private key from secrets
-          source: "static-web.tar"              # File to copy
-          target: "/home/ubuntu/"               # Target directory on EC2
-          overwrite: true                       # Replace existing file if any
+          host: ${{ env.EC2_PUBLIC_IP }}
+          username: ubuntu
+          key: ${{ secrets.EC2_KEY }}
+          source: "static-web.tar"
+          target: "/home/ubuntu/"
+          overwrite: true
 
-      # ✅ Step 4: Run Ansible playbook to deploy Docker container on EC2
-      - name: Run Ansible playbook on EC2
+      # ✅ Run Ansible playbook on EC2
+      - name: Run Ansible playbook
         uses: dawidd6/action-ansible-playbook@v2
         with:
-          playbook: ansible/deploy.yml           # Path to your Ansible playbook
-          # Inline inventory definition (no separate hosts.ini file needed)
+          playbook: ansible/deploy.yml
           inventory: |
             [all]
-            ${{ secrets.EC2_HOST }} ansible_user=${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_KEY }}            # Use SSH key from secrets
+            ${{ env.EC2_PUBLIC_IP }} ansible_user=ubuntu
+          key: ${{ secrets.EC2_KEY }}
 
-      # ✅ Step 5: Print deployment summary and site URL
+      # ✅ Deployment summary
       - name: Deployment summary
         run: |
           echo "✅ Deployment completed successfully!"
-          echo "🌍 Your static website is live at: http://${{ secrets.EC2_HOST }}"
+          echo "🌍 Your static website is live at: http://${{ env.EC2_PUBLIC_IP }}"
