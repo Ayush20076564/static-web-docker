@@ -1,7 +1,6 @@
 # ============================================================
-# 🌍 GITHUB ACTIONS WORKFLOW
-# AUTOMATED INFRASTRUCTURE + DOCKER + ANSIBLE DEPLOYMENT
-# USING TERRAFORM + GITHUB ACTIONS
+# 🌍 GITHUB ACTIONS — FULL AUTOMATED CI/CD PIPELINE
+# Terraform + Docker + Ansible Deployment to AWS EC2
 # ============================================================
 
 name: "🚀 Provision & Deploy aj-static-site to AWS EC2"
@@ -13,14 +12,14 @@ on:
 
 jobs:
   # ============================================================
-  # 🧱 TERRAFORM JOB — provisions AWS EC2 + Elastic IP + Security Group
+  # 🧱 TERRAFORM JOB — Creates EC2, EIP, and Security Group
   # ============================================================
   terraform:
     name: "🧱 Provision AWS Infrastructure"
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Setup Terraform
@@ -28,7 +27,7 @@ jobs:
 
       - name: Initialize Terraform
         run: terraform init
-        working-directory: .
+        working-directory: .  # main.tf is in root
 
       - name: Apply Terraform
         run: terraform apply -auto-approve
@@ -38,7 +37,6 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: us-east-1
 
-      # ✅ Save EC2 public IP as environment variable for later jobs
       - name: Capture EC2 Public IP
         id: ec2
         run: |
@@ -46,7 +44,7 @@ jobs:
         working-directory: .
 
   # ============================================================
-  # 🔨 BUILD JOB — builds Docker image for your static website
+  # 🔨 BUILD JOB — Builds Docker Image for Static Website
   # ============================================================
   build:
     name: "🔨 Build Docker Image"
@@ -54,16 +52,16 @@ jobs:
     needs: terraform
 
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Build Docker image
+      - name: Build Docker Image
         run: |
           echo "🛠️ Building Docker image..."
           docker build --no-cache -t aj-static-site:latest -f docker/Dockerfile ./docker
           echo "✅ Docker image built successfully!"
 
-      - name: Save Docker image as tar
+      - name: Save Docker Image as tar
         run: |
           echo "📦 Saving Docker image..."
           docker save aj-static-site:latest -o static-web.tar
@@ -71,14 +69,14 @@ jobs:
           ls -lh static-web.tar
           echo "✅ Docker image saved successfully!"
 
-      - name: Upload artifact
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: static-web
           path: static-web.tar
 
   # ============================================================
-  # 🚀 DEPLOY JOB — transfers Docker image and runs it on EC2
+  # 🚀 DEPLOY JOB — Uploads Image & Deploys via Ansible
   # ============================================================
   deploy:
     name: "🚀 Deploy to EC2 using Ansible"
@@ -86,17 +84,20 @@ jobs:
     needs: [terraform, build]
 
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Download artifact
+      - name: Download Artifact
         uses: actions/download-artifact@v4
         with:
           name: static-web
           path: .
 
-      # ✅ Copy image tar to the EC2 created by Terraform
-      - name: Copy tar file to EC2
+      - name: Print EC2 IP
+        run: echo "EC2 Public IP: $EC2_PUBLIC_IP"
+
+      # ✅ Step 1: Copy Docker tar file to EC2
+      - name: Copy Docker Image to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ env.EC2_PUBLIC_IP }}
@@ -106,8 +107,8 @@ jobs:
           target: "/home/ubuntu/"
           overwrite: true
 
-      # ✅ Run Ansible playbook on EC2
-      - name: Run Ansible playbook
+      # ✅ Step 2: Deploy with Ansible
+      - name: Run Ansible Playbook on EC2
         uses: dawidd6/action-ansible-playbook@v2
         with:
           playbook: ansible/deploy.yml
@@ -116,8 +117,8 @@ jobs:
             ${{ env.EC2_PUBLIC_IP }} ansible_user=ubuntu
           key: ${{ secrets.EC2_KEY }}
 
-      # ✅ Deployment summary
-      - name: Deployment summary
+      # ✅ Step 3: Print Deployment Summary
+      - name: Deployment Summary
         run: |
           echo "✅ Deployment completed successfully!"
           echo "🌍 Your static website is live at: http://${{ env.EC2_PUBLIC_IP }}"
