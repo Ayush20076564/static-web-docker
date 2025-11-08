@@ -94,7 +94,8 @@ jobs:
           path: .
 
       - name: Print EC2 IP
-        run: echo "EC2 Public IP: $EC2_PUBLIC_IP"
+        run: |
+          echo "EC2 Public IP: $EC2_PUBLIC_IP"
 
       # ✅ Step 1: Copy Docker tar file to EC2
       - name: Copy Docker Image to EC2
